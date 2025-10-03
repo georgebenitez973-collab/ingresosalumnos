@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Ingresos de Alumnos</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carga de Chart.js para el gráfico de pastel y barras -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <style>
+        /* Estilos personalizados */
+        #paymentProgressChart {
+            max-height: 250px;
+        }
+        .tab-button.active {
+            border-color: #4f46e5;
+            color: #4f46e5;
+        }
+        /* Estilos generales */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fc;
+        }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        /* Estilos de Tarjeta Ejecutiva */
+        .info-card {
+            border-radius: 0.75rem; /* rounded-xl */
+            padding: 1.5rem; /* p-6 */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="max-w-7xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 mb-6 border-b pb-2">Sistema de Gestión de Ingresos Académicos</h1>
+
+        <!-- Contenedor de Mensajes (Modal simple) -->
+        <div id="message-container" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full">
+                <p id="message-text" class="text-gray-700 font-semibold mb-4"></p>
+                <button onclick="document.getElementById('message-container').classList.add('hidden')" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">Aceptar</button>
+            </div>
+        </div>
+
+        <!-- Pestañas de Navegación -->
+        <div class="border-b border-gray-200 mb-6">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <button id="tab-students" onclick="showTab('students')" class="tab-button active border-b-2 py-3 px-1 text-sm font-medium text-indigo-600 border-indigo-500 whitespace-nowrap transition duration-150 ease-in-out">
+                    Alumnos y Gestión de Pagos
+                </button>
+                <button id="tab-dashboard" onclick="showTab('dashboard')" class="tab-button border-b-2 py-3 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap transition duration-150 ease-in-out">
+                    Dashboard / Análisis Financiero
+                </button>
+            </nav>
+        </div>
+
+        <!-- Contenido de las Pestañas -->
+        
+        <!-- PESTAÑA 1: ALUMNOS Y GESTIÓN DE PAGOS -->
+        <div id="students-tab-content" class="tab-content">
+            <div class="space-y-6">
+
+                <!-- Gráfico de Pastel de Progreso (Filtrado) -->
+                <div class="bg-white p-6 rounded-xl shadow-lg flex flex-col md:flex-row items-center justify-between">
+                    <div>
+                        <h2 class="text-xl font-semibold mb-2 text-indigo-700">Progreso de Pagos (Mes Seleccionado)</h2>
+                        <div class="flex space-x-4 mb-4">
+                             <select id="filter-month-alumnos" onchange="applyAlumnosProgressFilters()" class="p-2 border border-gray-300 rounded-lg text-sm">
+                                <!-- Opciones de meses llenadas por JS -->
+                            </select>
+                            <select id="filter-year-alumnos" onchange="applyAlumnosProgressFilters()" class="p-2 border border-gray-300 rounded-lg text-sm">
+                                <!-- Opciones de años llenadas por JS -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="relative w-36 h-36">
+                            <canvas id="paymentProgressChart"></canvas>
+                            <div id="chart-center-text" class="absolute inset-0 flex items-center justify-center flex-col text-gray-800">
+                                <span id="paid-percentage" class="text-2xl font-bold">0%</span>
+                                <span class="text-xs text-gray-500">Pagado</span>
+                            </div>
+                        </div>
+                        <div class="ml-6 text-sm">
+                             <p class="mb-1">Total Alumnos Activos: <span id="active-students-due" class="font-bold">0</span></p>
+                             <p class="text-green-600">Alumnos Pagados: <span id="paid-count" class="font-bold">0</span></p>
+                             <p class="text-red-600">Alumnos Pendientes: <span id="pending-count" class="font-bold">0</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Formulario de Registro de Alumno (Colapsable) -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <button id="toggle-student-form-btn" onclick="toggleStudentForm()" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg flex items-center justify-center">
+                        <svg id="toggle-icon" class="w-5 h-5 mr-2 transform transition-transform duration-300 rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span id="toggle-text">Agregar Nuevo Alumno</span>
+                    </button>
+
+                    <div id="student-form-container" class="mt-4 border border-gray-200 p-4 rounded-xl bg-gray-50 hidden">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">Datos del Nuevo Alumno</h3>
+                        <form id="student-form" class="space-y-4">
+                            <input type="text" id="student-name" placeholder="Nombre Completo del Alumno" required class="w-full p-2 border border-gray-300 rounded-lg">
+                            
+                            <label class="block text-sm font-medium text-gray-700 mt-2">Institución:</label>
+                            <select id="student-institution" required class="w-full p-2 border border-gray-300 rounded-lg" onchange="updateProgramDropdown('institution')">
+                                <option value="">-- Seleccione Institución --</option>
+                                <option value="IESM">IESM</option>
+                                <option value="UDC">UDC</option>
+                            </select>
+                            
+                            <label class="block text-sm font-medium text-gray-700">Tipo de Programa:</label>
+                            <select id="student-program-type" required class="w-full p-2 border border-gray-300 rounded-lg" onchange="updateProgramDropdown('type')" disabled>
+                                <option value="">-- Seleccione Tipo de Programa --</option>
+                            </select>
+
+                            <label class="block text-sm font-medium text-gray-700">Programa Específico:</label>
+                            <select id="student-specific-program" required class="w-full p-2 border border-gray-300 rounded-lg" disabled>
+                                <option value="">-- Seleccione Programa Específico --</option>
+                            </select>
+                            
+                            <label class="block text-sm font-medium text-gray-700 font-bold">Generación / Cohorte:</label>
+                            <input type="text" id="student-cohort-name" placeholder="Ej: G10 - Medicina Estética 2025" required class="w-full p-2 border border-indigo-400 rounded-lg">
+                            
+                            <label class="block text-sm font-medium text-gray-700">Fecha de Ingreso:</label>
+                            <input type="date" id="student-start-date" required class="w-full p-2 border border-gray-300 rounded-lg">
+                            <label class="block text-sm font-medium text-gray-700">Total de Meses del Programa (Ej: 24):</label>
+                            <input type="number" id="total-months" placeholder="Meses" required min="1" value="24" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <label class="block text-sm font-medium text-gray-700">Costo Mensual de Colegiatura (MXN):</label>
+                            <input type="number" id="monthly-fee" placeholder="Costo Mensual" required min="100" class="w-full p-2 border border-gray-300 rounded-lg">
+                            <div class="pt-2">
+                                 <button type="submit" class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition shadow-md">
+                                    Guardar Alumno
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Listado de Alumnos (General) -->
+                 <h3 class="text-lg font-semibold mb-4 text-gray-800">Listado y Status de Alumnos Activos / Inactivos</h3>
+                 <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alumno</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Institución / Programa Específico</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Generación (Cohorte)</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuota/Mes</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Último Pago Cubierto Hasta</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="students-list-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Filas de alumnos generadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                 <h3 class="text-2xl font-bold mb-4 text-gray-800 border-b pb-2">Gestión de Cobranza y Pagos</h3>
+
+                <!-- Tabla 1: Colegiaturas Mensuales -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 text-indigo-700">1. Gestión de Colegiaturas Mensuales (Alumnos Activos)</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alumno / Cohorte</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuota Mensual</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Último Mes Cubierto</th>
+                                    <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="active-payments-list-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Filas de alumnos activos generadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Sección Ingresos Especiales (Formulario Colapsable + Tabla) -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <button id="toggle-special-form-btn" onclick="toggleSpecialPaymentForm()" class="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700 transition shadow-lg flex items-center justify-center">
+                        <svg id="toggle-special-icon" class="w-5 h-5 mr-2 transform transition-transform duration-300 rotate-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        <span id="toggle-special-text">Registrar Ingreso Especial (+)</span>
+                    </button>
+
+                    <div id="special-payment-form-container" class="mt-4 border border-yellow-300 p-4 rounded-lg bg-yellow-50 hidden">
+                        <h3 class="text-lg font-semibold mb-4 text-yellow-700 border-b pb-2">Formulario de Ingresos No Recurrentes</h3>
+                        <form id="special-payment-form" class="space-y-4">
+                             <label class="block text-sm font-medium text-gray-700">Alumno Asociado (Opcional):</label>
+                            <select id="special-payment-student-id" class="w-full p-2 border border-gray-300 rounded-lg">
+                                <option value="">-- Sin Alumno Asociado (ej. Venta) --</option>
+                                <!-- Llenado por JS -->
+                            </select>
+
+                            <label class="block text-sm font-medium text-gray-700 font-bold">Concepto de Ingreso:</label>
+                            <input type="text" id="special-concept" placeholder="Ej: Pago de Titulación, Venta de Material, Curso Extra" required class="w-full p-2 border border-yellow-400 rounded-lg">
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Monto del Ingreso (MXN):</label>
+                                    <input type="number" id="special-amount" placeholder="Monto" required min="1" class="w-full p-2 border border-gray-300 rounded-lg">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Fecha de Ingreso:</label>
+                                    <input type="date" id="special-date" required class="w-full p-2 border border-gray-300 rounded-lg" value="<%= new Date().toISOString().substring(0, 10) %>">
+                                </div>
+                            </div>
+
+                            <label class="block text-sm font-medium text-gray-700">Comprobante (URL/Descripción/Recibo):</label>
+                            <input type="text" id="special-attachment-url" placeholder="Ej: Recibo No. 123 o URL del PDF" required class="w-full p-2 border border-gray-300 rounded-lg">
+                            
+                            <div class="pt-2">
+                                <button type="submit" class="w-full bg-yellow-600 text-white py-2 rounded-lg font-semibold hover:bg-yellow-700 transition shadow-md">
+                                    Registrar Ingreso Especial
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Tabla 2: Ingresos Especiales Registrados -->
+                    <h3 class="text-xl font-semibold mt-6 mb-4 text-yellow-700">2. Ingresos Especiales Registrados</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead>
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Concepto</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Alumno Asociado</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Comprobante</th>
+                                </tr>
+                            </thead>
+                            <tbody id="special-payments-list-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Filas de ingresos especiales generadas por JS -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        
+        <!-- PESTAÑA 2: DASHBOARD / ANÁLISIS FINANCIERO -->
+        <div id="dashboard-tab-content" class="tab-content hidden">
+            <div class="space-y-8">
+                
+                <h2 class="text-2xl font-bold text-gray-800">Dashboard Ejecutivo y Análisis Financiero</h2>
+                
+                <!-- Tarjetas Informativas Ejecutivas -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    
+                    <!-- Tarjeta 1: Ingreso Proyectado Total (Programa Completo) -->
+                    <div class="info-card bg-indigo-100 border-l-4 border-indigo-500">
+                        <p class="text-sm font-medium text-indigo-700">Ingreso Proyectado Total (Programa Completo)</p>
+                        <p id="total-projected-income" class="text-3xl font-bold text-indigo-900 mt-1">$0.00</p>
+                        <p class="text-xs text-indigo-600 mt-2">Suma de colegiaturas esperadas hasta el fin de todos los programas activos.</p>
+                    </div>
+
+                    <!-- Tarjeta 2: Ingreso Histórico Total (Realizado) -->
+                    <div class="info-card bg-green-100 border-l-4 border-green-500">
+                        <p class="text-sm font-medium text-green-700">Ingreso Histórico Total (Realizado)</p>
+                        <p id="total-realized-income" class="text-3xl font-bold text-green-900 mt-1">$0.00</p>
+                        <p class="text-xs text-green-600 mt-2">Suma de todos los pagos registrados (colegiatura y especiales).</p>
+                    </div>
+
+                    <!-- Tarjeta 3: Alumnos Activos -->
+                    <div class="info-card bg-gray-100 border-l-4 border-gray-400">
+                        <p class="text-sm font-medium text-gray-700">Alumnos Activos Recurrentes</p>
+                        <p id="total-active-students" class="text-3xl font-bold text-gray-900 mt-1">0</p>
+                        <p class="text-xs text-gray-600 mt-2">Alumnos activos que aún tienen pagos pendientes (no de contado).</p>
+                    </div>
+                </div>
+                
+                <!-- Filtros para Proyecciones y Análisis -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 text-indigo-700">Filtros de Proyección (Tabla y Gráficos)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                        <select id="filter-institution" onchange="applyFilters()" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                            <option value="">Todas las Instituciones</option>
+                            <option value="IESM">IESM</option>
+                            <option value="UDC">UDC</option>
+                        </select>
+                        <select id="filter-program" onchange="applyFilters()" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                            <option value="">Todos los Programas</option>
+                            <!-- Opciones llenadas dinámicamente o por JS -->
+                        </select>
+                         <select id="filter-cohort" onchange="applyFilters()" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                            <option value="">Todas las Generaciones</option>
+                            <!-- Opciones llenadas dinámicamente -->
+                        </select>
+                        <select id="filter-month" onchange="applyFilters()" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                            <option value="">Todos los Meses</option>
+                             <!-- Opciones de meses llenadas por JS -->
+                        </select>
+                        <select id="filter-year" onchange="applyFilters()" class="w-full p-2 border border-gray-300 rounded-lg text-sm">
+                            <option value="">Todos los Años</option>
+                             <!-- Opciones de años llenadas por JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Proyección Filtrada (Tabla) -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-700">Reporte de Proyección Filtrada (Tabla)</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead>
+                                    <tr>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mes</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ingreso Proyectado</th>
+                                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Acumulado (Filtrado)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="projection-table-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Filas generadas por JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Gráfico Comparativo de Proyección (Análisis Institucional) -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h3 class="text-xl font-semibold mb-4 text-indigo-700">Análisis Comparativo por Institución (Proyección 12 Meses)</h3>
+                        <div class="h-64">
+                            <canvas id="comparativeProjectionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                 <!-- NUEVA SECCIÓN: ANÁLISIS DE INGRESOS HISTÓRICOS -->
+                <div class="bg-white p-6 rounded-xl shadow-lg mt-6">
+                    <h3 class="text-xl font-semibold mb-4 text-green-700">Análisis Histórico de Ingresos (Realizados)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Gráfica de Pastel: Ingresos por Programa Específico -->
+                        <div>
+                             <h4 class="text-lg font-medium text-gray-700 mb-2">Distribución de Ingresos por Programa</h4>
+                             <div class="h-64">
+                                <canvas id="incomeByProgramChart"></canvas>
+                             </div>
+                             <p class="text-sm text-gray-500 mt-2">Muestra la distribución porcentual del total de ingresos registrados (colegiaturas y especiales) por programa académico.</p>
+                        </div>
+                        <!-- Gráfica de Pastel: Ingresos por Tipo (Colegiatura vs Especial) -->
+                        <div>
+                             <h4 class="text-lg font-medium text-gray-700 mb-2">Distribución de Ingresos por Tipo de Pago</h4>
+                             <div class="h-64">
+                                <canvas id="incomeByTypeChart"></canvas>
+                             </div>
+                              <p class="text-sm text-gray-500 mt-2">Muestra la distribución entre ingresos recurrentes (colegiaturas) e ingresos especiales (titulación, varios).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL DE REGISTRO DE PAGOS (UX Colegiaturas) -->
+    <div id="payment-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-xl shadow-2xl max-w-4xl w-full mx-4">
+            <h3 class="text-2xl font-bold mb-4 text-indigo-700 border-b pb-2">Registrar Colegiatura para <span id="modal-student-name"></span></h3>
+            
+            <form id="modal-payment-form" class="space-y-4 mb-6">
+                <input type="hidden" id="modal-student-id">
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Monto Pagado (MXN):</label>
+                        <input type="number" id="modal-payment-amount" placeholder="Monto" required min="1" class="w-full p-2 border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Meses Cubiertos (Máx. Restantes):</label>
+                        <!-- max attribute se actualizará dinámicamente -->
+                        <input type="number" id="modal-months-covered" placeholder="Meses" required min="1" value="1" max="48" class="w-full p-2 border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Fecha de Pago:</label>
+                        <input type="date" id="modal-payment-date" required class="w-full p-2 border border-gray-300 rounded-lg" value="<%= new Date().toISOString().substring(0, 10) %>">
+                    </div>
+                </div>
+                
+                <label class="block text-sm font-medium text-gray-700">Comprobante (URL/Descripción):</label>
+                <input type="text" id="modal-attachment-url" placeholder="Ej: Recibo No. 456 o URL del PDF" required class="w-full p-2 border border-gray-300 rounded-lg">
+                
+                <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition shadow-md">
+                    Confirmar Registro y Actualizar Proyección
+                </button>
+            </form>
+            
+            <h4 class="text-lg font-semibold mb-3 text-gray-800">Historial de Pagos y Mensualidades Esperadas (Total del Programa)</h4>
+            <div id="expected-payments-table-container" class="max-h-64 overflow-y-auto border rounded-lg">
+                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <thead>
+                        <tr class="sticky top-0 bg-gray-50">
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mes Esperado</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cuota (MXN)</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Comprobante/Recibo</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expected-payments-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Pagos esperados generados por JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <button onclick="document.getElementById('payment-modal').classList.add('hidden')" class="mt-4 w-full text-gray-600 py-2 rounded-lg hover:bg-gray-100 transition">Cerrar</button>
+        </div>
+    </div>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Establecer nivel de log para depuración de Firestore
+        setLogLevel('Debug');
+
+        // Variables globales (proporcionadas por el entorno de Canvas)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Inicialización de Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        let userId = null;
+        let isAuthReady = false;
+
+        const STUDENTS_COLLECTION = 'students';
+        const publicCollectionPath = `/artifacts/${appId}/public/data/${STUDENTS_COLLECTION}`;
+
+        const studentsData = {}; // Caché local para datos de alumnos
+        let currentProjection = {};
+        let chartInstance = null;
+        let comparativeChartInstance = null;
+        let incomeByProgramChartInstance = null;
+        let incomeByTypeChartInstance = null;
+        
+        // Mantenemos un máximo de 48 meses (4 años) como límite visible en el futuro para evitar iteraciones excesivas, aunque la lógica respeta el totalMonthsProgram
+        const MAX_FUTURE_MONTHS = 48; 
+        const maxComparativeMonths = 12;
+
+        // Filtros globales para Dashboard (Proyecciones)
+        let currentFilters = {
+            institution: '',
+            program: '',
+            cohort: '',
+            month: '',
+            year: ''
+        };
+        
+        // Filtros globales para Pestaña Alumnos (Gráfico de Progreso)
+        let alumnosProgressFilters = {
+            month: (new Date().getMonth() + 1).toString(), // Mes actual
+            year: new Date().getFullYear().toString()
+        };
+
+
+        // Definición de programas por institución, tipo y programa específico
+        const PROGRAMS = {
+            'IESM': {
+                'Cirugía Estética': ['Maestría en Cirugía Estética']
+            },
+            'UDC': {
+                'Programa Médico': ['Maestría en Medicina Estética y Longevidad'],
+                'Programa No Médico': ['Licenciatura en Derecho', 'Administración', 'Maestría en Derecho Procesal Penal']
+            }
+        };
+
+        // --- Utilidades ---
+        function showMessage(text) {
+            document.getElementById('message-text').textContent = text;
+            document.getElementById('message-container').classList.remove('hidden');
+        }
+
+        const addMonths = (date, months) => {
+            const d = new Date(date);
+            const originalDay = d.getDate();
+            d.setMonth(d.getMonth() + months);
+            if (d.getDate() < originalDay) {
+                 d.setDate(0); 
+            }
+            return d;
+        };
+        
+        const formatDate = (date) => {
+            return date.toISOString().substring(0, 10);
+        };
+
+        const formatCurrency = (amount) => {
+             return new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(amount);
+        };
+
+        const getNextPaymentMonth = (student) => {
+            if (student.status !== 'Active') return null;
+            const payments = student.payments || [];
+            if (payments.length === 0) return new Date(student.startDate);
+
+            let totalMonthsCovered = payments.reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+
+            return addMonths(new Date(student.startDate), totalMonthsCovered);
+        };
+
+        const getMonthName = (date) => date.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+        const getShortMonthName = (date) => date.toLocaleDateString('es-MX', { month: 'short', year: '2-digit' });
+
+
+        // --- LÓGICA PRINCIPAL (PROYECCIONES) ---
+
+        const calculateProjections = () => {
+            const projection = {};
+            const comparativeProjection = { 'IESM': Array(maxComparativeMonths).fill(0), 'UDC': Array(maxComparativeMonths).fill(0), labels: [] };
+            const today = new Date();
+            let totalProjectedIncome = 0; // Nuevo acumulador para la tarjeta
+
+            // 1. Inicializar objetos de proyección para un horizonte máximo de MAX_FUTURE_MONTHS
+            for (let i = 0; i < MAX_FUTURE_MONTHS; i++) {
+                const projectedMonth = addMonths(today, i);
+                const yearMonth = projectedMonth.toISOString().substring(0, 7);
+                projection[yearMonth] = { amount: 0, date: projectedMonth };
+
+                if (i < maxComparativeMonths) {
+                    comparativeProjection.labels.push(getShortMonthName(projectedMonth));
+                }
+            }
+
+            let activeStudentsCount = 0;
+
+            Object.values(studentsData).forEach(student => {
+                // Contar alumnos activos que generan ingresos recurrentes
+                if (student.status === 'Active' && !student.isFullPayment && student.monthlyFee > 0) {
+                     activeStudentsCount++;
+                }
+
+                if (student.status !== 'Active') return;
+                
+                const monthlyFee = student.monthlyFee;
+                const totalMonths = student.totalMonthsProgram; // Duración TOTAL del programa
+                const studentStartDate = new Date(student.startDate);
+                
+                let totalMonthsPaid = (student.payments || [])
+                    .filter(p => p.type === 'colegiatura')
+                    .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+
+                // Si es pago de contado, la proyección de *colegiatura* es cero.
+                if (student.isFullPayment) {
+                    // Si pagó de contado, sumamos el valor total de la colegiatura al ingreso proyectado total
+                    // (Aunque ya se haya pagado, esto garantiza que la tarjeta de "proyectado total" refleje el valor del programa)
+                    // Mejor: solo sumamos lo que FALTA por pagar. Si pagó de contado, falta 0.
+                    return; 
+                }
+
+                let nextExpectedPaymentMonth = getNextPaymentMonth(student);
+
+                // Iterar hasta el límite del programa del alumno
+                for (let i = 0; i < totalMonths; i++) {
+                    const projectedDate = addMonths(studentStartDate, i);
+                    const yearMonth = projectedDate.toISOString().substring(0, 7);
+                    
+                    // Si la fecha proyectada ya pasó, o si el mes ya fue cubierto por un pago (i < totalMonthsPaid), no se proyecta
+                    if (i < totalMonthsPaid) continue; 
+
+                    // 2. Proyectar colegiaturas a futuro (solo si no ha sido pagado)
+                    
+                    // Si la fecha proyectada es FUTURA o HOY (se usa getNextPaymentMonth para mayor precisión)
+                    if (projectedDate >= today) {
+                        
+                        // Si está dentro de la ventana de visualización (MAX_FUTURE_MONTHS desde hoy)
+                        // Calculamos cuántos meses futuros es projectedDate desde today:
+                        const futureMonthsIndex = Math.floor((projectedDate - today) / (1000 * 60 * 60 * 24 * 30.4375));
+                        
+                        if (futureMonthsIndex < MAX_FUTURE_MONTHS) {
+
+                             if (!projection[yearMonth]) {
+                                projection[yearMonth] = { amount: 0, date: projectedDate };
+                             }
+                             projection[yearMonth].amount += monthlyFee;
+                             
+                             if (futureMonthsIndex < maxComparativeMonths) {
+                                if (student.institution === 'IESM') comparativeProjection.IESM[futureMonthsIndex] += monthlyFee;
+                                if (student.institution === 'UDC') comparativeProjection.UDC[futureMonthsIndex] += monthlyFee;
+                             }
+                        }
+                        
+                        // Contribución al total proyectado (siempre se suma el restante, independientemente de la ventana visual)
+                        totalProjectedIncome += monthlyFee;
+                    }
+                    
+                    // Solo proyectar el mes una vez
+                    if (projectedDate >= nextExpectedPaymentMonth) {
+                         nextExpectedPaymentMonth = addMonths(nextExpectedPaymentMonth, 1);
+                    }
+                }
+            });
+            
+            currentProjection = projection;
+            
+            // Actualizar tarjetas informativas
+            document.getElementById('total-projected-income').textContent = formatCurrency(totalProjectedIncome);
+            document.getElementById('total-active-students').textContent = activeStudentsCount;
+
+
+            renderProjectionTable();
+            renderComparativeChart(comparativeProjection);
+        };
+
+        const renderProjectionTable = () => {
+            const tbody = document.getElementById('projection-table-body');
+            tbody.innerHTML = '';
+            let cumulativeTotal = 0;
+            const filterMonth = currentFilters.month ? parseInt(currentFilters.month) : null;
+            const filterYear = currentFilters.year ? parseInt(currentFilters.year) : null;
+
+            // --- Lógica de la Proyección Filtrada (Basada en la duración del programa) ---
+            
+            // 1. Recalcular la proyección aplicando filtros A NIVEL ESTUDIANTE (Solo los meses no cubiertos)
+            const filteredProjection = {};
+            const today = new Date();
+
+            Object.values(studentsData).forEach(student => {
+                if (student.status !== 'Active' || student.isFullPayment) return;
+                
+                // Aplicar filtros de Institución/Programa/Cohorte a nivel de estudiante
+                let studentMatchesFilters = true;
+                if (currentFilters.institution && student.institution !== currentFilters.institution) studentMatchesFilters = false;
+                if (currentFilters.program && student.programName !== currentFilters.program) studentMatchesFilters = false;
+                if (currentFilters.cohort && student.cohortName !== currentFilters.cohort) studentMatchesFilters = false;
+                
+                if (!studentMatchesFilters) return; // Si el alumno no pasa los filtros de la entidad, se ignora
+
+                const monthlyFee = student.monthlyFee;
+                const totalMonths = student.totalMonthsProgram;
+                const studentStartDate = new Date(student.startDate);
+                
+                let totalMonthsPaid = (student.payments || [])
+                    .filter(p => p.type === 'colegiatura')
+                    .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+
+                let nextExpectedPaymentMonth = getNextPaymentMonth(student);
+
+                // Iterar hasta el límite del programa del alumno
+                for (let i = 0; i < totalMonths; i++) {
+                    const projectedDate = addMonths(studentStartDate, i);
+                    const yearMonth = projectedDate.toISOString().substring(0, 7);
+                    
+                    // Si el mes ya fue cubierto por un pago (i < totalMonthsPaid), no se proyecta
+                    if (i < totalMonthsPaid) continue; 
+
+                    // 2. Proyectar colegiaturas a futuro (solo si no ha sido pagado y es futuro)
+                    if (projectedDate >= today) {
+                         
+                         if (!filteredProjection[yearMonth]) {
+                             filteredProjection[yearMonth] = { amount: 0, date: projectedDate };
+                         }
+                         filteredProjection[yearMonth].amount += monthlyFee;
+                    }
+                }
+            });
+
+
+            // 3. Recorrer la proyección filtrada y renderizar, aplicando filtros DE TIEMPO
+            let monthIndex = 0;
+            const filteredAndSortedMonths = Object.entries(filteredProjection).sort((a, b) => new Date(a[1].date) - new Date(b[1].date));
+            
+            if (filteredAndSortedMonths.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="3" class="px-3 py-4 text-center text-gray-500">No hay ingresos proyectados que cumplan con los filtros seleccionados.</td></tr>';
+                 return;
+            }
+
+            for (const [yearMonth, data] of filteredAndSortedMonths) {
+                const projectedDate = data.date;
+                const amount = data.amount;
+
+                let passesMonthFilter = !filterMonth || (projectedDate.getMonth() + 1) === filterMonth;
+                let passesYearFilter = !filterYear || projectedDate.getFullYear() === filterYear;
+                
+                if (passesMonthFilter && passesYearFilter) {
+                    cumulativeTotal += amount;
+                    const monthName = getMonthName(projectedDate);
+                    
+                    // Solo marcar como "ACTUAL" si no hay filtros de mes o año aplicados
+                    const isCurrentMonth = monthIndex === 0 && !filterMonth && !filterYear; 
+
+                    const row = `
+                        <tr class="${isCurrentMonth ? 'bg-indigo-50 font-semibold' : 'hover:bg-gray-50'}">
+                            <td class="px-3 py-2 whitespace-nowrap">${isCurrentMonth ? 'ACTUAL: ' : ''}${monthName}</td>
+                            <td class="px-3 py-2 whitespace-nowrap text-right">${formatCurrency(amount)}</td>
+                            <td class="px-3 py-2 whitespace-nowrap text-right">${formatCurrency(cumulativeTotal)}</td>
+                        </tr>
+                    `;
+                    tbody.insertAdjacentHTML('beforeend', row);
+                }
+                
+                // Mantenemos el conteo para determinar cuál es el mes actual si no hay filtros de tiempo
+                if (!filterMonth && !filterYear) {
+                    monthIndex++;
+                }
+            }
+        };
+        
+        const renderComparativeChart = (data) => {
+            const ctx = document.getElementById('comparativeProjectionChart').getContext('2d');
+            
+            const chartData = {
+                labels: data.labels,
+                datasets: [
+                    {
+                        label: 'IESM Proyectado',
+                        data: data.IESM,
+                        backgroundColor: '#4f46e5', // Indigo
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'UDC Proyectado',
+                        data: data.UDC,
+                        backgroundColor: '#fbbf24', // Yellow
+                        borderRadius: 4
+                    }
+                ]
+            };
+            
+            if (comparativeChartInstance) {
+                comparativeChartInstance.destroy();
+            }
+
+            comparativeChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            stacked: true,
+                            title: { display: true, text: 'Ingreso (MXN)' }
+                        },
+                        x: {
+                            stacked: true,
+                        }
+                    }
+                }
+            });
+        };
+        
+        // --- NUEVAS FUNCIONES DE ANÁLISIS FINANCIERO (GRÁFICAS DE PASTEL) ---
+        
+        const calculateRealizedIncomeBreakdown = () => {
+            const incomeByProgram = {};
+            let totalRealizedIncome = 0;
+            let incomeByType = {
+                colegiatura: 0,
+                especial: 0,
+                total: 0
+            };
+
+            Object.values(studentsData).forEach(student => {
+                (student.payments || []).forEach(payment => {
+                    // Usar el nombre específico del programa, si es un alumno, o el concepto si es Ingreso Vario
+                    const programKey = (student.status !== 'Ingreso Especial') ? student.programName : payment.description.replace('[INGRESO ESPECIAL: ', '').split(']')[0];
+                    const amount = payment.amount || 0;
+                    
+                    // 1. Calculate Income by Program
+                    if (programKey) {
+                        if (!incomeByProgram[programKey]) {
+                            incomeByProgram[programKey] = 0;
+                        }
+                        incomeByProgram[programKey] += amount;
+                    }
+                    
+                    // 2. Calculate Income by Type
+                    const type = payment.type || 'colegiatura';
+                    if (incomeByType[type] !== undefined) {
+                        incomeByType[type] += amount;
+                    } else {
+                         incomeByType.especial += amount;
+                    }
+
+                    totalRealizedIncome += amount;
+                });
+            });
+
+            incomeByType.total = totalRealizedIncome;
+            
+            // Actualizar tarjeta de ingreso histórico
+            document.getElementById('total-realized-income').textContent = formatCurrency(totalRealizedIncome);
+
+            renderIncomeByProgramChart(incomeByProgram);
+            renderIncomeByTypeChart(incomeByType);
+        };
+        
+        const renderIncomeByProgramChart = (data) => {
+            const ctx = document.getElementById('incomeByProgramChart').getContext('2d');
+            const labels = Object.keys(data).filter(key => data[key] > 0); 
+            const amounts = labels.map(key => data[key]);
+            
+            // Generar colores únicos para los programas
+            const backgroundColors = labels.map((_, index) => {
+                 const hue = (index * 137) % 360; // Algoritmo simple para dispersión de colores
+                 return `hsl(${hue}, 70%, 50%)`;
+            });
+
+            const chartData = {
+                labels: labels.map(label => `${label} (${formatCurrency(data[label])})`),
+                datasets: [{
+                    data: amounts,
+                    backgroundColor: backgroundColors,
+                    hoverOffset: 8
+                }]
+            };
+            
+            if (incomeByProgramChartInstance) {
+                incomeByProgramChartInstance.destroy();
+            }
+            
+            incomeByProgramChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' },
+                        title: { display: false }
+                    }
+                }
+            });
+        };
+
+        const renderIncomeByTypeChart = (data) => {
+            const ctx = document.getElementById('incomeByTypeChart').getContext('2d');
+            
+            const labels = [
+                `Colegiaturas (${formatCurrency(data.colegiatura)})`,
+                `Especiales (${formatCurrency(data.especial)})`
+            ];
+            const amounts = [data.colegiatura, data.especial];
+            
+            const chartData = {
+                labels: labels,
+                datasets: [{
+                    data: amounts,
+                    backgroundColor: ['#4f46e5', '#fbbf24'], // Indigo and Yellow for consistency
+                    hoverOffset: 8
+                }]
+            };
+            
+            if (incomeByTypeChartInstance) {
+                incomeByTypeChartInstance.destroy();
+            }
+            
+            incomeByTypeChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right' },
+                        title: { display: false }
+                    }
+                }
+            });
+        };
+
+
+        // --- LÓGICA DE PROGRESO DE PAGOS (ALUMNOS TAB) ---
+
+        const renderPaymentProgressChart = (month, year) => {
+            const targetMonth = parseInt(month) - 1; // 0-based
+            const targetYear = parseInt(year);
+            
+            let totalStudentsDue = 0;
+            let totalStudentsPaid = 0;
+            
+            Object.values(studentsData).forEach(student => {
+                // Excluir registros de Ingresos Varios
+                if (student.status !== 'Active' || student.isFullPayment && student.monthlyFee === 0) return;
+                
+                // Excluir alumnos que pagaron de contado
+                if (student.isFullPayment && student.monthlyFee > 0) {
+                     totalStudentsPaid++; // Se asume que el mes actual está cubierto
+                     totalStudentsDue++;
+                     return;
+                }
+                
+                const studentStartDate = new Date(student.startDate);
+
+                // 1. Determinar cuántos meses ha pagado históricamente (solo colegiaturas)
+                const totalMonthsCovered = (student.payments || [])
+                    .filter(p => p.type === 'colegiatura')
+                    .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+
+                // 2. Determinar el mes de inicio del programa (0-based index)
+                const startMonthIndex = studentStartDate.getFullYear() * 12 + studentStartDate.getMonth();
+                // 3. Determinar el mes objetivo (0-based index)
+                const targetMonthIndex = targetYear * 12 + targetMonth;
+                
+                // 4. Determinar si el alumno DEBE haber pagado en el mes objetivo
+                const monthIndexInProgram = targetMonthIndex - startMonthIndex;
+
+                if (monthIndexInProgram >= 0 && monthIndexInProgram < student.totalMonthsProgram) {
+                     totalStudentsDue++; // El alumno está activo y el mes está dentro de su programa
+                     
+                     // 5. Determinar si su pago cubre el mes objetivo
+                     if (totalMonthsCovered > monthIndexInProgram) {
+                         totalStudentsPaid++; // El número de meses pagados excede el índice del mes objetivo
+                     }
+                }
+            });
+
+            const studentsDueForChart = totalStudentsDue; 
+            const paidPercentage = studentsDueForChart > 0 ? Math.round((totalStudentsPaid / studentsDueForChart) * 100) : 0;
+            const unpaidCount = studentsDueForChart - totalStudentsPaid;
+            
+            document.getElementById('paid-percentage').textContent = `${paidPercentage}%`;
+            document.getElementById('active-students-due').textContent = studentsDueForChart;
+            document.getElementById('paid-count').textContent = totalStudentsPaid;
+            document.getElementById('pending-count').textContent = unpaidCount;
+
+            const chartData = {
+                labels: ['Pagado', 'Pendiente'],
+                datasets: [{
+                    data: [totalStudentsPaid, unpaidCount],
+                    backgroundColor: ['#4c51bf', '#e5e7eb'],
+                    hoverOffset: 4
+                }]
+            };
+
+            const config = {
+                type: 'doughnut',
+                data: chartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (context) => {
+                             return `${context.label}: ${context.raw} alumnos`;
+                        }}}
+                    }
+                }
+            };
+            
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+            chartInstance = new Chart(
+                document.getElementById('paymentProgressChart'),
+                config
+            );
+        };
+
+
+        // --- FUNCIONES DE RENDERIZADO DE TABLAS ---
+        
+        const renderStudentsList = () => {
+            const tbody = document.getElementById('students-list-body');
+            tbody.innerHTML = '';
+
+            Object.values(studentsData)
+                .filter(s => s.status !== 'Ingreso Especial') // Excluir registros de ingresos varios
+                .forEach(student => {
+                
+                const totalMonthsCovered = (student.payments || [])
+                    .filter(p => p.type === 'colegiatura')
+                    .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+                
+                const lastCovered = totalMonthsCovered > 0
+                    ? addMonths(new Date(student.startDate), totalMonthsCovered - 1)
+                    : new Date(new Date(student.startDate).getFullYear(), new Date(student.startDate).getMonth(), 0);
+
+                const statusBadge = `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${student.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">${student.status === 'Active' ? 'Activo' : 'Baja'}</span>`;
+                const lastCoveredText = student.isFullPayment 
+                    ? 'PAGO TOTAL (Contado)' 
+                    : lastCovered.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+                
+                const programDisplay = `${student.programType}: ${student.programName}`;
+
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 font-medium text-gray-900">${student.name}</td>
+                        <td class="px-3 py-2 text-gray-500">${student.institution} / ${programDisplay}</td>
+                        <td class="px-3 py-2 text-gray-500">${student.cohortName}</td>
+                        <td class="px-3 py-2 text-gray-500">${formatCurrency(student.monthlyFee)}</td>
+                        <td class="px-3 py-2">${statusBadge}</td>
+                        <td class="px-3 py-2 text-gray-700">${lastCoveredText}</td>
+                        <td class="px-3 py-2">
+                            <button onclick="toggleStudentStatus('${student.id}', '${student.status}')" 
+                                class="text-xs font-semibold ${student.status === 'Active' ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}">
+                                Dar de ${student.status === 'Active' ? 'Baja' : 'Alta'}
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        };
+
+        const renderActivePaymentStudents = () => {
+            const tbody = document.getElementById('active-payments-list-body');
+            const studentSelect = document.getElementById('special-payment-student-id');
+            
+            tbody.innerHTML = '';
+            studentSelect.innerHTML = '<option value="">-- Sin Alumno Asociado (ej. Venta) --</option>';
+
+
+            Object.values(studentsData).filter(s => s.status === 'Active' && s.monthlyFee > 0).forEach(student => {
+                const totalMonthsCovered = (student.payments || [])
+                    .filter(p => p.type === 'colegiatura')
+                    .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+                
+                const lastCovered = totalMonthsCovered > 0
+                    ? addMonths(new Date(student.startDate), totalMonthsCovered - 1)
+                    : new Date(new Date(student.startDate).getFullYear(), new Date(student.startDate).getMonth(), 0);
+
+                const lastCoveredText = student.isFullPayment 
+                    ? 'PAGO TOTAL (Contado)' 
+                    : lastCovered.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 font-medium text-gray-900">${student.name}<br><span class="text-xs text-gray-500">${student.cohortName}</span></td>
+                        <td class="px-3 py-2 text-gray-500">${formatCurrency(student.monthlyFee)}</td>
+                        <td class="px-3 py-2 text-gray-700">${lastCoveredText}</td>
+                        <td class="px-3 py-2 text-center">
+                            <button onclick="openPaymentModal('${student.id}')" 
+                                class="bg-indigo-500 text-white px-3 py-1 rounded-lg text-xs font-semibold hover:bg-indigo-600 transition">
+                                Registrar Pago
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+                
+                // También agregamos al dropdown de pagos especiales
+                const option = document.createElement('option');
+                option.value = student.id;
+                option.textContent = `${student.name} (${student.institution} - ${student.cohortName})`;
+                studentSelect.appendChild(option);
+            });
+        };
+        
+        const renderSpecialPaymentsList = () => {
+            const tbody = document.getElementById('special-payments-list-body');
+            tbody.innerHTML = '';
+            
+            // Recopilar todos los pagos de tipo 'especial' de todos los alumnos, incluyendo los registros de Ingresos Varios
+            const specialPayments = [];
+
+            Object.values(studentsData).forEach(student => {
+                const studentName = student.status === 'Ingreso Especial' ? student.name : student.name;
+                (student.payments || [])
+                    .filter(p => p.type === 'especial')
+                    .forEach(payment => {
+                        specialPayments.push({
+                            date: payment.date,
+                            concept: payment.description.replace('[INGRESO ESPECIAL: ', '').split(']')[0], // Limpiar el prefijo de concepto
+                            amount: payment.amount,
+                            attachment: payment.description,
+                            associatedStudent: student.status === 'Ingreso Especial' ? 'N/A' : studentName
+                        });
+                    });
+            });
+
+            // Ordenar por fecha de más reciente a más antiguo
+            specialPayments.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            if (specialPayments.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="5" class="px-3 py-4 text-center text-gray-500">No hay ingresos especiales registrados.</td></tr>';
+                 return;
+            }
+
+            specialPayments.forEach(payment => {
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 text-gray-500">${payment.date}</td>
+                        <td class="px-3 py-2 font-medium text-gray-900">${payment.concept}</td>
+                        <td class="px-3 py-2 text-gray-500">${payment.associatedStudent}</td>
+                        <td class="px-3 py-2 text-green-600 font-semibold">${formatCurrency(payment.amount)}</td>
+                        <td class="px-3 py-2 text-xs text-gray-500 truncate max-w-xs">${payment.attachment}</td>
+                    </tr>
+                `;
+                tbody.insertAdjacentHTML('beforeend', row);
+            });
+        };
+        
+        // --- FUNCIONES GLOBALES ---
+
+        // Función para cambiar el status del alumno (Global)
+        window.toggleStudentStatus = async (studentId, currentStatus) => {
+            const newStatus = currentStatus === 'Active' ? 'DroppedOut' : 'Active';
+            const studentRef = doc(db, publicCollectionPath, studentId);
+            try {
+                await updateDoc(studentRef, {
+                    status: newStatus
+                });
+                showMessage(`Alumno ${studentsData[studentId].name} dado de ${newStatus === 'DroppedOut' ? 'Baja' : 'Alta'} correctamente. La proyección ha sido actualizada.`);
+            } catch (error) {
+                console.error("Error al actualizar status:", error);
+                showMessage("Error al actualizar el status del alumno.");
+            }
+        };
+
+        // Función para abrir el modal de pago y pre-llenar los pagos esperados (Global)
+        window.openPaymentModal = (studentId) => {
+            const student = studentsData[studentId];
+            if (!student) return showMessage("Error: Alumno no encontrado.");
+
+            document.getElementById('modal-student-name').textContent = student.name;
+            document.getElementById('modal-student-id').value = studentId;
+            document.getElementById('modal-months-covered').value = 1;
+            document.getElementById('modal-payment-amount').value = student.monthlyFee;
+            document.getElementById('modal-attachment-url').value = '';
+
+            const paymentsBody = document.getElementById('expected-payments-body');
+            paymentsBody.innerHTML = '';
+            
+            const studentStartDate = new Date(student.startDate);
+            const totalMonthsPaid = (student.payments || [])
+                .filter(p => p.type === 'colegiatura')
+                .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+
+            // La tabla muestra la duración COMPLETA del programa
+            for (let i = 0; i < student.totalMonthsProgram; i++) {
+                const expectedPaymentDate = addMonths(studentStartDate, i);
+                const isPaid = i < totalMonthsPaid;
+                const statusText = isPaid ? 'Pagado' : 'Pendiente';
+                const statusClass = isPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+                
+                let paymentReceipt = 'N/A';
+                if (isPaid) {
+                    // Buscar el comprobante del mes cubierto 'i'
+                    let currentCoveredMonth = 0;
+                    for (const payment of student.payments.filter(p => p.type === 'colegiatura')) {
+                        const start = currentCoveredMonth;
+                        const end = currentCoveredMonth + payment.monthsCovered;
+
+                        if (i >= start && i < end) {
+                            paymentReceipt = payment.description || `Recibo ${formatDate(new Date(payment.processedAt))}`;
+                            break;
+                        }
+                        currentCoveredMonth = end;
+                    }
+                }
+                
+                const row = `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-2">${getMonthName(expectedPaymentDate)}</td>
+                        <td class="px-4 py-2">${formatCurrency(student.monthlyFee)}</td>
+                        <td class="px-4 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusClass}">${statusText}</span></td>
+                        <td class="px-4 py-2 text-xs text-gray-600 truncate max-w-xs">${paymentReceipt}</td>
+                    </tr>
+                `;
+                paymentsBody.insertAdjacentHTML('beforeend', row);
+            }
+            
+            // Actualizar el valor máximo del campo de meses cubiertos
+            const remainingMonths = student.totalMonthsProgram - totalMonthsPaid;
+            document.getElementById('modal-months-covered').max = remainingMonths;
+            document.getElementById('modal-months-covered').placeholder = `Máx. ${remainingMonths}`;
+            if (remainingMonths === 0) {
+                 document.getElementById('modal-payment-form').querySelector('button[type="submit"]').disabled = true;
+                 document.getElementById('modal-payment-amount').placeholder = 'Programa cubierto';
+            } else {
+                 document.getElementById('modal-payment-form').querySelector('button[type="submit"]').disabled = false;
+                 document.getElementById('modal-payment-amount').placeholder = 'Monto';
+            }
+
+            document.getElementById('payment-modal').classList.remove('hidden');
+        };
+        
+        // --- LÓGICA DE FILTROS Y DROPDOWNS ---
+
+        window.applyFilters = () => {
+            // Recoger valores de los filtros del Dashboard
+            currentFilters.institution = document.getElementById('filter-institution').value;
+            currentFilters.program = document.getElementById('filter-program').value;
+            currentFilters.cohort = document.getElementById('filter-cohort').value;
+            currentFilters.month = document.getElementById('filter-month').value;
+            currentFilters.year = document.getElementById('filter-year').value;
+            
+            // Recalculamos SOLO la tabla de proyección con los filtros
+            renderProjectionTable();
+        };
+        
+        window.applyAlumnosProgressFilters = () => {
+             // Recoger valores de los filtros de la pestaña Alumnos
+            alumnosProgressFilters.month = document.getElementById('filter-month-alumnos').value;
+            alumnosProgressFilters.year = document.getElementById('filter-year-alumnos').value;
+            
+            if(alumnosProgressFilters.month && alumnosProgressFilters.year) {
+                 renderPaymentProgressChart(alumnosProgressFilters.month, alumnosProgressFilters.year);
+            }
+        };
+
+        const updateFilterDropdowns = () => {
+            const programsSet = new Set();
+            const cohortsSet = new Set();
+            const yearsSet = new Set();
+            const now = new Date();
+
+            const generateYearOptions = (selectElementId) => {
+                 const select = document.getElementById(selectElementId);
+                 select.innerHTML = selectElementId === 'filter-year' ? '<option value="">Todos los Años</option>' : '<option value="">-- Seleccione Año --</option>';
+                 
+                 // Último año, actual y próximos 3 años
+                 for (let i = -1; i < 5; i++) { 
+                     yearsSet.add(now.getFullYear() + i);
+                 }
+                 
+                 Object.values(studentsData).forEach(s => {
+                     yearsSet.add(new Date(s.startDate).getFullYear());
+                     programsSet.add(s.programName);
+                     cohortsSet.add(s.cohortName);
+                 });
+                 
+                 [...yearsSet].sort().forEach(year => {
+                     const option = document.createElement('option');
+                     option.value = year;
+                     option.textContent = year;
+                     select.appendChild(option);
+                 });
+                 return select;
+            }
+
+            // Llenar Años (Dashboard)
+            generateYearOptions('filter-year');
+            // Llenar Años (Alumnos Progress)
+            const alumnosYearSelect = generateYearOptions('filter-year-alumnos');
+            alumnosYearSelect.value = alumnosProgressFilters.year; 
+
+            // Llenar Meses
+            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            
+            const monthSelectDashboard = document.getElementById('filter-month');
+            const monthSelectAlumnos = document.getElementById('filter-month-alumnos');
+            
+            [monthSelectDashboard, monthSelectAlumnos].forEach(select => {
+                 select.innerHTML = select.id === 'filter-month' ? '<option value="">Todos los Meses</option>' : '<option value="">-- Seleccione Mes --</option>';
+                 
+                 monthNames.forEach((name, index) => {
+                     const option = document.createElement('option');
+                     option.value = index + 1; // 1-based month index
+                     option.textContent = name;
+                     select.appendChild(option);
+                 });
+            });
+            
+            monthSelectAlumnos.value = alumnosProgressFilters.month; 
+
+
+            // Llenar Programas
+            const programSelect = document.getElementById('filter-program');
+            programSelect.innerHTML = '<option value="">Todos los Programas</option>';
+            [...programsSet].sort().forEach(program => {
+                const option = document.createElement('option');
+                option.value = program;
+                option.textContent = program;
+                programSelect.appendChild(option);
+            });
+
+            // Llenar Cohortes
+            const cohortSelect = document.getElementById('filter-cohort');
+            cohortSelect.innerHTML = '<option value="">Todas las Generaciones</option>';
+            [...cohortsSet].sort().forEach(cohort => {
+                const option = document.createElement('option');
+                option.value = cohort;
+                option.textContent = cohort;
+                cohortSelect.appendChild(option);
+            });
+        };
+
+
+        window.updateProgramDropdown = (level) => {
+            const institutionSelect = document.getElementById('student-institution');
+            const typeSelect = document.getElementById('student-program-type');
+            const programSelect = document.getElementById('student-specific-program');
+            
+            const selectedInstitution = institutionSelect.value;
+            const selectedProgramType = typeSelect.value;
+            
+            // 1. Update Program Type (based on Institution)
+            if (level === 'institution' || level === undefined) {
+                typeSelect.innerHTML = '<option value="">-- Seleccione Tipo de Programa --</option>';
+                typeSelect.disabled = true;
+                programSelect.innerHTML = '<option value="">-- Seleccione Programa Específico --</option>';
+                programSelect.disabled = true;
+
+                if (selectedInstitution && PROGRAMS[selectedInstitution]) {
+                    const types = Object.keys(PROGRAMS[selectedInstitution]);
+                    types.forEach(type => {
+                        const option = document.createElement('option');
+                        option.value = type;
+                        option.textContent = type;
+                        typeSelect.appendChild(option);
+                    });
+                    typeSelect.disabled = false;
+                    // Auto-selecciona si solo hay una opción (ej: IESM)
+                    if (types.length === 1) { typeSelect.value = types[0]; updateProgramDropdown('type'); }
+                }
+            }
+            
+            // 2. Update Specific Program (based on Program Type)
+            if (level === 'type' || level === undefined) {
+                 programSelect.innerHTML = '<option value="">-- Seleccione Programa Específico --</option>';
+                 programSelect.disabled = true;
+
+                 if (selectedInstitution && selectedProgramType && PROGRAMS[selectedInstitution][selectedProgramType]) {
+                    PROGRAMS[selectedInstitution][selectedProgramType].forEach(programName => {
+                        const option = document.createElement('option');
+                        option.value = programName;
+                        option.textContent = programName;
+                        programSelect.appendChild(option);
+                    });
+                    programSelect.disabled = false;
+                }
+            }
+        };
+
+        window.toggleStudentForm = () => {
+            const container = document.getElementById('student-form-container');
+            const icon = document.getElementById('toggle-icon');
+            const text = document.getElementById('toggle-text');
+            const isHidden = container.classList.contains('hidden');
+
+            if (isHidden) {
+                container.classList.remove('hidden');
+                icon.classList.remove('rotate-0');
+                icon.classList.add('rotate-45');
+                text.textContent = 'Ocultar Formulario';
+            } else {
+                container.classList.add('hidden');
+                icon.classList.remove('rotate-45');
+                icon.classList.add('rotate-0');
+                text.textContent = 'Agregar Nuevo Alumno';
+            }
+        };
+        
+        window.toggleSpecialPaymentForm = () => {
+            const container = document.getElementById('special-payment-form-container');
+            const icon = document.getElementById('toggle-special-icon');
+            const text = document.getElementById('toggle-special-text');
+            const isHidden = container.classList.contains('hidden');
+
+            if (isHidden) {
+                container.classList.remove('hidden');
+                icon.classList.remove('rotate-0');
+                icon.classList.add('rotate-45');
+                text.textContent = 'Ocultar Formulario de Ingreso Especial';
+            } else {
+                container.classList.add('hidden');
+                icon.classList.remove('rotate-45');
+                icon.classList.add('rotate-0');
+                text.textContent = 'Registrar Ingreso Especial (+)';
+            }
+        };
+
+
+        // --- MANEJO DE EVENTOS Y FIREBASE SETUP ---
+
+        // 1. Inicialización de Autenticación
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                userId = user.uid;
+            } else {
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Authentication failed:", error);
+                }
+            }
+            isAuthReady = true;
+            setupFirestoreListener();
+        });
+        
+        // 2. Listener de Firestore
+        const setupFirestoreListener = () => {
+            if (!isAuthReady) return;
+
+            const q = query(collection(db, publicCollectionPath));
+            
+            onSnapshot(q, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const student = { id: change.doc.id, ...change.doc.data() };
+                    studentsData[student.id] = student;
+                });
+                
+                // Recalcular y Renderizar todo en cada cambio
+                updateFilterDropdowns();
+                // calculateProjections se encarga de las tarjetas y los charts, pero la tabla la renderiza renderProjectionTable con filtros.
+                calculateProjections(); 
+                calculateRealizedIncomeBreakdown(); 
+                renderStudentsList(); 
+                renderActivePaymentStudents(); 
+                renderSpecialPaymentsList(); // Nueva función de renderizado
+                
+                renderProjectionTable(); // Renderizamos la tabla filtrada al inicio
+                
+                renderPaymentProgressChart(alumnosProgressFilters.month, alumnosProgressFilters.year);
+                
+            }, (error) => {
+                console.error("Error al escuchar la base de datos:", error);
+            });
+        };
+
+        // 3. Registrar Nuevo Alumno
+        document.getElementById('student-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('student-name').value;
+            const institution = document.getElementById('student-institution').value;
+            const programType = document.getElementById('student-program-type').value;
+            const programName = document.getElementById('student-specific-program').value;
+            const cohortName = document.getElementById('student-cohort-name').value;
+            const startDate = document.getElementById('student-start-date').value;
+            const totalMonths = parseInt(document.getElementById('total-months').value);
+            const monthlyFee = parseFloat(document.getElementById('monthly-fee').value);
+            const studentId = doc(collection(db, publicCollectionPath)).id;
+            
+            if (!programType || !programName) {
+                 showMessage("Por favor, seleccione la Institución, Tipo de Programa y Programa Específico.");
+                 return;
+            }
+
+            const newStudent = {
+                id: studentId,
+                name: name,
+                institution: institution,
+                programType: programType,
+                programName: programName,
+                cohortName: cohortName,
+                startDate: startDate,
+                totalMonthsProgram: totalMonths,
+                monthlyFee: monthlyFee,
+                status: 'Active',
+                payments: [],
+                isFullPayment: false,
+                createdAt: new Date().toISOString()
+            };
+
+            try {
+                await setDoc(doc(db, publicCollectionPath, studentId), newStudent);
+                showMessage(`Alumno ${name} registrado exitosamente!`);
+                e.target.reset();
+                updateProgramDropdown();
+                toggleStudentForm();
+            } catch (error) {
+                console.error("Error al registrar alumno:", error);
+                showMessage("Hubo un error al guardar el alumno.");
+            }
+        });
+        
+        // 4. Manejo del formulario dentro del modal (Colegiaturas)
+        document.getElementById('modal-payment-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentId = document.getElementById('modal-student-id').value;
+            const student = studentsData[studentId];
+
+            const amount = parseFloat(document.getElementById('modal-payment-amount').value);
+            let monthsCovered = parseInt(document.getElementById('modal-months-covered').value);
+            const paymentDate = document.getElementById('modal-payment-date').value;
+            const attachmentUrl = document.getElementById('modal-attachment-url').value;
+
+            if (!attachmentUrl) {
+                showMessage("Debe adjuntar un comprobante (URL o descripción de recibo).");
+                return;
+            }
+
+            // Validar que no se exceda el programa
+            let totalMonthsPaidBefore = (student.payments || [])
+                 .filter(p => p.type === 'colegiatura')
+                 .reduce((sum, p) => p.isFullPayment ? student.totalMonthsProgram : sum + p.monthsCovered, 0);
+            const remainingMonths = student.totalMonthsProgram - totalMonthsPaidBefore;
+            
+            let isFullPayment = false;
+
+            if (monthsCovered > remainingMonths) {
+                showMessage(`Advertencia: Solo quedan ${remainingMonths} meses por pagar. Ajustando meses cubiertos.`);
+                monthsCovered = remainingMonths;
+            }
+            if (monthsCovered === remainingMonths && student.monthlyFee > 0) {
+                 isFullPayment = true;
+            }
+            
+            let monthsStartFrom = addMonths(new Date(student.startDate), totalMonthsPaidBefore);
+
+            const newPayment = {
+                date: paymentDate,
+                amount: amount,
+                monthsCovered: monthsCovered,
+                monthsStartFrom: monthsStartFrom.toISOString().substring(0, 10),
+                description: attachmentUrl,
+                isFullPayment: isFullPayment,
+                type: 'colegiatura',
+                processedAt: new Date().toISOString()
+            };
+
+            const studentRef = doc(db, publicCollectionPath, studentId);
+            
+            try {
+                await updateDoc(studentRef, {
+                    payments: arrayUnion(newPayment),
+                    isFullPayment: student.isFullPayment || isFullPayment, 
+                });
+
+                document.getElementById('payment-modal').classList.add('hidden');
+                showMessage(`Pago de ${monthsCovered} meses registrado para ${student.name}. Proyección y Dashboard actualizados.`);
+                e.target.reset();
+            } catch (error) {
+                console.error("Error al registrar pago:", error);
+                showMessage("Hubo un error al guardar el pago.");
+            }
+        });
+        
+        // 5. Manejo de formulario de Ingresos Especiales
+        document.getElementById('special-payment-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentId = document.getElementById('special-payment-student-id').value || null;
+            const concept = document.getElementById('special-concept').value;
+            const amount = parseFloat(document.getElementById('special-amount').value);
+            const date = document.getElementById('special-date').value;
+            const attachmentUrl = document.getElementById('special-attachment-url').value;
+            
+            const studentName = studentId ? studentsData[studentId].name : 'INGRESOS VARIOS';
+            
+            if (!attachmentUrl) {
+                showMessage("Debe adjuntar un comprobante (URL o descripción de recibo).");
+                return;
+            }
+
+            const newPayment = {
+                date: date,
+                amount: amount,
+                monthsCovered: 0, 
+                monthsStartFrom: date,
+                description: `[INGRESO ESPECIAL: ${concept}] - ${attachmentUrl}`,
+                isFullPayment: false,
+                type: 'especial',
+                processedAt: new Date().toISOString()
+            };
+
+            const docId = studentId || doc(collection(db, publicCollectionPath)).id;
+            const docRef = doc(db, publicCollectionPath, docId);
+            
+            try {
+                // Si no hay alumno, creamos un registro de "Ingresos Varios"
+                if (!studentId) {
+                    const genericStudent = {
+                        id: docId,
+                        name: 'Ingresos Varios',
+                        institution: 'N/A',
+                        programType: 'Especial',
+                        programName: concept,
+                        cohortName: date.substring(0, 7),
+                        startDate: date,
+                        totalMonthsProgram: 1,
+                        monthlyFee: 0,
+                        status: 'Ingreso Especial',
+                        payments: [newPayment],
+                        isFullPayment: true,
+                        createdAt: new Date().toISOString()
+                    };
+                    await setDoc(docRef, genericStudent);
+                } else {
+                     await updateDoc(docRef, {
+                        payments: arrayUnion(newPayment),
+                    });
+                }
+
+
+                showMessage(`Ingreso Especial de ${formatCurrency(amount)} registrado para ${studentName}.`);
+                e.target.reset();
+                toggleSpecialPaymentForm(); // Ocultar después de registrar
+            } catch (error) {
+                console.error("Error al registrar ingreso especial:", error);
+                showMessage("Hubo un error al guardar el ingreso especial.");
+            }
+        });
+        
+        // 6. Lógica de Pestañas
+        window.showTab = (tabId) => {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-button').forEach(el => {
+                el.classList.remove('active', 'text-indigo-600', 'border-indigo-500');
+                el.classList.add('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            });
+
+            document.getElementById(`${tabId}-tab-content`).classList.remove('hidden');
+            const button = document.getElementById(`tab-${tabId}`);
+            button.classList.add('active', 'text-indigo-600', 'border-indigo-500');
+            button.classList.remove('text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            
+            // Recalcular y re-renderizar la vista activa
+            if(tabId === 'dashboard') {
+                // Asegurar que las proyecciones y el análisis histórico se calculen
+                calculateProjections(); // Recalcula tarjetas, chart comparativo y llama a renderProjectionTable
+                calculateRealizedIncomeBreakdown(); 
+            } else if (tabId === 'students') {
+                // Asegurar que el gráfico de progreso se filtre correctamente
+                applyAlumnosProgressFilters();
+            }
+        };
+
+        // Mostrar la pestaña de alumnos por defecto
+        document.addEventListener('DOMContentLoaded', () => {
+            showTab('students'); 
+            updateProgramDropdown();
+        });
+
+    </script>
+</body>
+</html>
